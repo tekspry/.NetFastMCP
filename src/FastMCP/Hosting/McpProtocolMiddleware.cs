@@ -9,17 +9,22 @@ using System.Reflection;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization; 
+using Microsoft.Extensions.DependencyInjection;
+using System.Security.Claims;
 
 namespace FastMCP.Hosting;
 
 public class McpProtocolMiddleware
 {
     private readonly RequestDelegate _next;
+    private readonly IAuthorizationService _authorizationService; // Injected
     private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-
-    public McpProtocolMiddleware(RequestDelegate next)
+    
+    public McpProtocolMiddleware(RequestDelegate next, IAuthorizationService authorizationService)
     {
         _next = next;
+         _authorizationService = authorizationService;
     }
 
     public async Task InvokeAsync(HttpContext context, FastMCPServer server)
@@ -65,9 +70,12 @@ public class McpProtocolMiddleware
                 await JsonSerializer.SerializeAsync(context.Response.Body, response, _jsonOptions);
                 return;
             }
-
+            
+            MethodInfo? toolMethod = null;
+            object? instance = null; 
+            
             // Find method in Tools, then Resources
-            var toolMethod = server.Tools.FirstOrDefault(t =>
+            toolMethod = server.Tools.FirstOrDefault(t =>
                 (t.GetCustomAttribute<McpToolAttribute>()?.Name ?? t.Name)
                     .Equals(request.Method, StringComparison.OrdinalIgnoreCase));
             
@@ -75,7 +83,22 @@ public class McpProtocolMiddleware
             {
                 // For resources, use the method name for invocation (not the URI which is metadata)
                 toolMethod = server.Resources.FirstOrDefault(t =>
-                    t.Name.Equals(request.Method, StringComparison.OrdinalIgnoreCase));
+                    (t.GetCustomAttribute<McpResourceAttribute>()?.Uri?.Split('/').Last() ?? t.Name)
+                        .Equals(request.Method, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Handle dynamic tools (e.g., OpenAPI proxies)
+            if (toolMethod is null && server.DynamicTools.TryGetValue(request.Method, out var dynamicToolHandler))
+            {
+                // For dynamic tools, we'll wrap the `ExecuteAsync` method of the proxy
+                // to allow it to be invoked and potentially authorized.
+                // This is a simplification; a full solution for dynamic tool auth is more complex
+                // and might involve an `IMcpToolHandler` interface.
+                if (dynamicToolHandler is IDynamicMcpToolHandler mcpDynamicToolHandler) // Use the interface
+                {
+                    toolMethod = mcpDynamicToolHandler.GetInvocationMethodInfo(); // Get MethodInfo from the handler
+                    instance = mcpDynamicToolHandler; // Provide the instance for invocation
+                }
             }
 
             if (toolMethod is null)
@@ -89,11 +112,66 @@ public class McpProtocolMiddleware
                 return;
             }
 
+            // --- Authorization Check ---
+            var authorizeAttribute = toolMethod.GetCustomAttribute<AuthorizeMcpToolAttribute>();
+            if (authorizeAttribute != null)
+            {
+                var policyBuilder = new AuthorizationPolicyBuilder();
+
+                if (!string.IsNullOrEmpty(authorizeAttribute.Policy))
+                {
+                    policyBuilder.AddRequirements(new PolicyNameRequirement(authorizeAttribute.Policy));
+                }
+                if (!string.IsNullOrEmpty(authorizeAttribute.Roles))
+                {
+                    policyBuilder.RequireRole(authorizeAttribute.Roles.Split(',', StringSplitOptions.RemoveEmptyEntries));
+                }
+                if (!string.IsNullOrEmpty(authorizeAttribute.AuthenticationSchemes))
+                {
+                    policyBuilder.AddAuthenticationSchemes(authorizeAttribute.AuthenticationSchemes.Split(',', StringSplitOptions.RemoveEmptyEntries));
+                }
+
+                // If no specific policy/roles/schemes are defined, it just requires an authenticated user
+                if (!policyBuilder.Requirements.Any() && policyBuilder.AuthenticationSchemes.Count == 0)
+                {
+                    policyBuilder.RequireAuthenticatedUser();
+                }
+
+                var policy = policyBuilder.Build();
+                
+                var authorizationResult = await _authorizationService.AuthorizeAsync(context.User, instance, policy);
+
+                if (!authorizationResult.Succeeded)
+                {
+                    Console.WriteLine($"[Middleware] Authorization failed for method '{request.Method}' (User: {context.User.Identity?.Name ?? "Anonymous"})");
+                    
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized; // Set HTTP status for browser clients
+
+                    // Return a JSON-RPC error indicating unauthorized/forbidden
+                    var errorResponse = JsonRpcResponse.FromError(
+                        JsonRpcError.ErrorCodes.InternalError, // You might define a custom error code for unauthorized/forbidden
+                        "Unauthorized or Forbidden. User might not be authenticated or lack necessary permissions.",
+                        request.Id);
+                    await JsonSerializer.SerializeAsync(context.Response.Body, errorResponse, _jsonOptions);
+                    return;
+                }
+                Console.WriteLine($"[Middleware] Authorization successful for method '{request.Method}' (User: {context.User.Identity?.Name ?? "Anonymous"})");
+            }
+            // --- End Authorization Check ---
+
             object?[] args;
             try
             {
                 Console.WriteLine($"[Middleware] Binding parameters for {request.Method}...");
-                args = BindParameters(toolMethod, request.Params);
+                 // If it's an OpenApiToolProxy, the ExecuteAsync method expects a JsonElement
+                if (instance is IDynamicMcpToolHandler && request.Params is JsonElement)
+                {
+                    args = new object?[] { request.Params };
+                }
+                else
+                {
+                    args = BindParameters(toolMethod, request.Params, context.User);
+                }
                 Console.WriteLine($"[Middleware] Parameter binding successful");
             }
             catch (Exception ex)
@@ -110,7 +188,10 @@ public class McpProtocolMiddleware
             try
             {
                 Console.WriteLine($"[Middleware] Invoking method {request.Method}...");
-                var result = toolMethod.Invoke(null, args);
+                
+                // If it's a static method, instance is null. If it's a dynamic proxy, instance is the proxy object.
+                var result = await (Task<object?>)toolMethod.Invoke(instance, args)!; 
+                
                 Console.WriteLine($"[Middleware] Method invocation successful, result={result}");
                 var response = new JsonRpcResponse { Id = request.Id, Result = result };
                 await JsonSerializer.SerializeAsync(context.Response.Body, response, _jsonOptions);
@@ -150,7 +231,7 @@ public class McpProtocolMiddleware
     /// Binds JSON-RPC parameters to method parameters.
     /// Supports both array-style (positional) and object-style (named) parameters.
     /// </summary>
-    private object?[] BindParameters(MethodInfo method, object? rpcParams)
+    private object?[] BindParameters(MethodInfo method, object? rpcParams, ClaimsPrincipal? user = null)
     {
         var methodParams = method.GetParameters();
         if (methodParams.Length == 0) 
@@ -158,6 +239,23 @@ public class McpProtocolMiddleware
 
         var args = new object?[methodParams.Length];
         
+        // Check if any parameter is of type ClaimsPrincipal or AccessToken
+        for (int i = 0; i < methodParams.Length; i++)
+        {
+            var param = methodParams[i];
+            
+            // Inject ClaimsPrincipal if requested
+            if (param.ParameterType == typeof(ClaimsPrincipal))
+            {
+                args[i] = user;
+                continue;
+            }
+            
+            // Inject AccessToken if requested (requires token verification)
+            // TODO: Implement token extraction and verification if needed
+        }
+
+
         // Handle null parameters
         if (rpcParams is null)
         {
@@ -218,7 +316,7 @@ public class McpProtocolMiddleware
             var paramProp = paramsElement.EnumerateObject()
                 .FirstOrDefault(p => p.Name.Equals(param.Name, StringComparison.OrdinalIgnoreCase));
             
-            if (!paramProp.Equals(default))
+            if (!paramProp.Equals(default(JsonProperty)))
             {
                 args[i] = paramProp.Value.Deserialize(param.ParameterType, _jsonOptions);
             }

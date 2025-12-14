@@ -5,6 +5,7 @@ using Microsoft.OpenApi.Readers;
 using System.Reflection;
 using System.Text.Json;
 using System.Net.Http;
+using System.Linq;
 
 namespace FastMCP.OpenApi;
 
@@ -41,7 +42,7 @@ public static class OpenApiMcpConverter
                 var description = operation.Summary ?? operation.Description;
 
                 // Create an OpenApiToolProxy instance for each operation
-                var toolProxy = new OpenApiToolProxy(httpMethod, path.Key, operation, description, baseUrl);
+                var toolProxy = new OpenApiToolProxy(toolName, httpMethod, path.Key, operation, description, baseUrl);
                 
                 // Store the proxy in the server's dynamic tools dictionary
                 server.DynamicTools[toolName] = toolProxy;
@@ -82,41 +83,41 @@ public static class OpenApiMcpConverter
 /// <summary>
 /// Represents an OpenAPI operation that can be invoked as an MCP tool.
 /// </summary>
-public class OpenApiToolProxy
-{
-    public string HttpMethod { get; }
-    public string Path { get; }
-    public OpenApiOperation Operation { get; }
-    public string? Description { get; }
-    public string? BaseUrl { get; }
+// public class OpenApiToolProxy
+// {
+//     public string HttpMethod { get; }
+//     public string Path { get; }
+//     public OpenApiOperation Operation { get; }
+//     public string? Description { get; }
+//     public string? BaseUrl { get; }
 
-    public OpenApiToolProxy(string httpMethod, string path, OpenApiOperation operation, string? description, string? baseUrl = null)
-    {
-        HttpMethod = httpMethod;
-        Path = path;
-        Operation = operation;
-        Description = description;
-        BaseUrl = baseUrl;
-    }
+//     public OpenApiToolProxy(string httpMethod, string path, OpenApiOperation operation, string? description, string? baseUrl = null)
+//     {
+//         HttpMethod = httpMethod;
+//         Path = path;
+//         Operation = operation;
+//         Description = description;
+//         BaseUrl = baseUrl;
+//     }
 
-    /// <summary>
-    /// Executes the OpenAPI operation with the provided parameters.
-    /// </summary>
-    public async Task<object> ExecuteAsync(JsonElement parameters)
-    {
-        // Placeholder for actual HTTP request logic
-        // In a real implementation, this would:
-        // 1. Build the full URL from BaseUrl and Path
-        // 2. Serialize parameters to query string, headers, or request body
-        // 3. Send the request using HttpClient
-        // 4. Deserialize and return the response
+//     /// <summary>
+//     /// Executes the OpenAPI operation with the provided parameters.
+//     /// </summary>
+//     public async Task<object> ExecuteAsync(JsonElement parameters)
+//     {
+//         // Placeholder for actual HTTP request logic
+//         // In a real implementation, this would:
+//         // 1. Build the full URL from BaseUrl and Path
+//         // 2. Serialize parameters to query string, headers, or request body
+//         // 3. Send the request using HttpClient
+//         // 4. Deserialize and return the response
         
-        await Task.Delay(10); // Simulate async work
-        return new 
-        { 
-            status = "success",
-            operation = $"{HttpMethod} {Path}",
-            receivedParams = parameters.GetRawText() 
-        };
-    }
-}
+//         await Task.Delay(10); // Simulate async work
+//         return new 
+//         { 
+//             status = "success",
+//             operation = $"{HttpMethod} {Path}",
+//             receivedParams = parameters.GetRawText() 
+//         };
+//     }
+// }

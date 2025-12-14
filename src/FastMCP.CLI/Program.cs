@@ -1,21 +1,34 @@
-using System.CommandLine;
+using System;
 using System.Reflection;
 
-var rootCommand = new RootCommand("Command-line interface for the DotnetFastMCP framework.");
+var cmd = args.Length > 0 ? args[0] : string.Empty;
 
-// Version Command - mirrors `fastmcp version`
-var versionCommand = new Command("version", "Display version information.");
-versionCommand.SetHandler(() => 
+if (string.IsNullOrEmpty(cmd) || cmd.Equals("--help", StringComparison.OrdinalIgnoreCase) || cmd.Equals("-h", StringComparison.OrdinalIgnoreCase))
 {
-    var version = Assembly.GetExecutingAssembly().GetName().Version;
-    Console.WriteLine($"FastMCP.CLI Version: {version}");
-    // In a real implementation, we would also load the core library version.
-});
+    Console.WriteLine("FastMCP.CLI - Command-line interface for the DotnetFastMCP framework.");
+    Console.WriteLine();
+    Console.WriteLine("Usage:");
+    Console.WriteLine("  fastmcp version    Display version information");
+    Console.WriteLine();
+    return;
+}
 
-rootCommand.AddCommand(versionCommand);
+switch (cmd.ToLowerInvariant())
+{
+    case "version":
+    {
+        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0";
+        Console.WriteLine($"FastMCP.CLI Version: {version}");
+        // In a real implementation, we would also load the core library version.
+        return;
+    }
 
-// TODO: Implement the 'run' command to load and start a server from a project.
-// var runCommand = new Command("run", "Run an MCP server.");
-// rootCommand.AddCommand(runCommand);
-
-return await rootCommand.InvokeAsync(args);
+    // Future commands can be added here (e.g., "run", "generate", "validate")
+    default:
+    {
+        Console.Error.WriteLine($"Unknown command: {cmd}");
+        Console.Error.WriteLine("Use --help to list available commands.");
+        Environment.ExitCode = 1;
+        return;
+    }
+}
