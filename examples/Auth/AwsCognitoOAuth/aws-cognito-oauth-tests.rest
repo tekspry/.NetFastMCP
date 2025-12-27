@@ -1,0 +1,243 @@
+### AWS Cognito OAuth Authentication Tests for DotnetFastMCP
+### Configuration Reference: README.md
+### This file tests the complete AWS Cognito OAuth authentication flow
+### 
+### Prerequisites:
+### 1. AWS Cognito User Pool and App Client configured
+### 2. Environment variables set:
+###    - FASTMCP_SERVER_AUTH_AWSCOGNITO_USER_POOL_ID
+###    - FASTMCP_SERVER_AUTH_AWSCOGNITO_REGION
+###    - FASTMCP_SERVER_AUTH_AWSCOGNITO_CLIENT_ID
+###    - FASTMCP_SERVER_AUTH_AWSCOGNITO_CLIENT_SECRET
+### 3. DotnetFastMCP server running on http://localhost:5002
+### 4. VS Code REST Client extension installed
+
+### ============================================================================
+### VARIABLES SECTION
+### ============================================================================
+
+### Server Configuration
+@baseUrl = http://localhost:5002
+@mcpEndpoint = {{baseUrl}}/mcp
+@oauthCallbackUrl = {{baseUrl}}/auth/callback
+
+### AWS Cognito Configuration
+@region = us-east-1
+@userPoolId = us-east-1_XXXXXXXXX
+@clientId = your-cognito-client-id
+@clientSecret = your-cognito-client-secret
+@cognitoDomain = your-domain.auth.us-east-1.amazoncognito.com
+@requiredScopes = openid,profile,email
+
+### Computed URLs
+@cognitoAuthority = https://{{cognitoDomain}}
+@cognitoTokenEndpoint = {{cognitoAuthority}}/oauth2/token
+@cognitoAuthorizeEndpoint = {{cognitoAuthority}}/oauth2/authorize
+@cognitoUserinfoEndpoint = {{cognitoAuthority}}/oauth2/userInfo
+@cognitoJwksEndpoint = https://cognito-idp.{{region}}.amazonaws.com/{{userPoolId}}/.well-known/jwks.json
+
+### Token Variables
+@accessToken =
+@refreshToken =
+@authorizationCode =
+@idToken =
+
+### ============================================================================
+### SECTION 1: DISCOVERY ENDPOINTS
+### ============================================================================
+
+### 1.1 Get Cognito OpenID Configuration
+GET https://cognito-idp.{{region}}.amazonaws.com/{{userPoolId}}/.well-known/openid-configuration
+Accept: application/json
+
+### 1.2 Get Cognito JWKS
+GET {{cognitoJwksEndpoint}}
+Accept: application/json
+
+### 1.3 Get Server OAuth Metadata
+GET {{baseUrl}}/.well-known/oauth-authorization-server
+Accept: application/json
+
+### ============================================================================
+### SECTION 2: PUBLIC ENDPOINTS
+### ============================================================================
+
+### 2.1 Test Public Tool
+POST {{mcpEndpoint}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetStatus",
+  "params": [],
+  "id": 1
+}
+
+### ============================================================================
+### SECTION 3: PROTECTED ENDPOINTS
+### ============================================================================
+
+### 3.1 Try Protected Tool WITHOUT Token (Should Fail)
+POST {{mcpEndpoint}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetUserInfo",
+  "params": [],
+  "id": 2
+}
+
+### 3.2 Get Authenticated User Info (Requires Valid Cognito Token)
+POST {{mcpEndpoint}}
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetUserInfo",
+  "params": [],
+  "id": 3
+}
+
+### ============================================================================
+### SECTION 4: OAUTH AUTHORIZATION CODE FLOW
+### ============================================================================
+
+### 4.1 Step 1 - MANUAL: Get Authorization Code
+### Navigate to this URL in your browser
+### 
+### URL:
+ https://{{cognitoDomain}}/oauth2/authorize?
+   client_id={{clientId}}&
+   response_type=code&
+   scope=openid%20profile%20email&
+   redirect_uri={{oauthCallbackUrl}}&
+   state=random-state-value
+###
+### After authentication, you'll be redirected to:
+### {{oauthCallbackUrl}}?code=YOUR_CODE&state=random-state-value
+###
+### Copy the 'code' parameter from the URL bar
+
+### 4.2 Step 2 - Exchange Authorization Code for Access Token
+POST {{cognitoTokenEndpoint}}
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic {{base64(clientId:clientSecret)}}
+
+grant_type=authorization_code&
+client_id={{clientId}}&
+code={{authorizationCode}}&
+redirect_uri={{oauthCallbackUrl}}
+
+### 4.3 Step 3 - Refresh Access Token
+POST {{cognitoTokenEndpoint}}
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic {{base64(clientId:clientSecret)}}
+
+grant_type=refresh_token&
+client_id={{clientId}}&
+refresh_token={{refreshToken}}
+
+### ============================================================================
+### SECTION 5: AWS COGNITO API INTEGRATION
+### ============================================================================
+
+### 5.1 Get User Info from Cognito
+GET {{cognitoUserinfoEndpoint}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### 5.2 Get User Attributes (AWS SDK Required)
+### Note: This requires AWS SDK and credentials
+### POST https://cognito-idp.{{region}}.amazonaws.com/
+### X-Amz-Target: AWSCognitoIdentityProviderService.GetUser
+### Content-Type: application/x-amz-json-1.1
+### 
+### {
+###   "AccessToken": "{{accessToken}}"
+### }
+
+### ============================================================================
+### SECTION 6: CLIENT CREDENTIALS FLOW
+### ============================================================================
+
+### 6.1 Get Access Token via Client Credentials
+### Note: Requires App Client with client credentials flow enabled
+POST {{cognitoTokenEndpoint}}
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic {{base64(clientId:clientSecret)}}
+
+grant_type=client_credentials&
+scope=custom/scope
+
+### ============================================================================
+### SECTION 7: TOKEN MANAGEMENT
+### ============================================================================
+
+### 7.1 Revoke Token
+POST {{cognitoAuthority}}/oauth2/revoke
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic {{base64(clientId:clientSecret)}}
+
+token={{refreshToken}}
+
+### ============================================================================
+### SECTION 8: HOSTED UI FLOWS
+### ============================================================================
+
+### 8.1 Hosted UI Login
+### Navigate to this URL for Cognito Hosted UI
+### https://{{cognitoDomain}}/login?
+###   client_id={{clientId}}&
+###   response_type=code&
+###   scope=openid%20profile%20email&
+###   redirect_uri={{oauthCallbackUrl}}
+
+### 8.2 Hosted UI Logout
+### https://{{cognitoDomain}}/logout?
+###   client_id={{clientId}}&
+###   logout_uri={{baseUrl}}
+
+### ============================================================================
+### TESTING WORKFLOW
+### ============================================================================
+###
+### STEP 1: Setup AWS Cognito User Pool
+### □ Create User Pool in AWS Console
+### □ Create App Client (enable client secret)
+### □ Configure App Client settings:
+###   - Enable Authorization code grant
+###   - Enable Implicit grant (optional)
+###   - Add Callback URL: {{oauthCallbackUrl}}
+###   - Add Sign out URL
+### □ Configure Hosted UI domain
+### □ Note: User Pool ID, Region, Client ID, Client Secret, Domain
+###
+### STEP 2: Create Test User
+### □ Create user in User Pool
+### □ Confirm user (if required)
+### □ Set permanent password
+###
+### STEP 3: Configure Environment Variables
+### □ Set FASTMCP_SERVER_AUTH_AWSCOGNITO_USER_POOL_ID
+### □ Set FASTMCP_SERVER_AUTH_AWSCOGNITO_REGION
+### □ Set FASTMCP_SERVER_AUTH_AWSCOGNITO_CLIENT_ID
+### □ Set FASTMCP_SERVER_AUTH_AWSCOGNITO_CLIENT_SECRET
+###
+### STEP 4: Execute Tests
+### □ Run Section 4.1 - Get Authorization Code
+### □ Run Section 4.2 - Exchange for token
+### □ Update @accessToken
+### □ Run Section 5 - Cognito API Tests
+###
+### TROUBLESHOOTING
+### • 401 Unauthorized: Token invalid or expired
+### • 403 Forbidden: User not confirmed or disabled
+### • Redirect URI mismatch: Verify in App Client settings
+### • Invalid client: Ensure client secret is correct
+### • User not found: Create and confirm user in User Pool
+
+### ============================================================================
+### END OF AWS COGNITO OAUTH AUTHENTICATION TESTS
+### ============================================================================

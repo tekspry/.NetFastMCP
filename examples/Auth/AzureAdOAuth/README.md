@@ -21,22 +21,28 @@ Demonstrates FastMCP server protection with Azure AD (Microsoft Entra) OAuth.
 
 Set environment variables:
 
+```powershell
 # Windows PowerShell
 $env:FASTMCP_SERVER_AUTH_AZUREAD_TENANT_ID="your-tenant-id"
 $env:FASTMCP_SERVER_AUTH_AZUREAD_CLIENT_ID="your-client-id"
 $env:FASTMCP_SERVER_AUTH_AZUREAD_CLIENT_SECRET="your-client-secret"
-$env:FASTMCP_SERVER_AUTH_AZUREAD_BASE_AUTHORITY="login.microsoftonline.com"
-$env:FASTMCP_SERVER_AUTH_AZUREAD_REQUIRED_SCOPES="openid,profile,email" # Example scopes
+```
 
+```bash
 # Linux/Mac
 export FASTMCP_SERVER_AUTH_AZUREAD_TENANT_ID="your-tenant-id"
 export FASTMCP_SERVER_AUTH_AZUREAD_CLIENT_ID="your-client-id"
 export FASTMCP_SERVER_AUTH_AZUREAD_CLIENT_SECRET="your-client-secret"
-export FASTMCP_SERVER_AUTH_AZUREAD_BASE_AUTHORITY="login.microsoftonline.com"
-export FASTMCP_SERVER_AUTH_AZUREAD_REQUIRED_SCOPES="openid,profile,email"### 3. Run the Server
+```
 
+### 3. Run the Server
+
+```bash
 cd examples/Auth/AzureAdOAuth
-dotnet runThe server will start on `http://localhost:5002` with:
+dotnet run
+```
+
+The server will start on `http://localhost:5002` with:
 - MCP endpoint: `http://localhost:5002/mcp`
 - OAuth callback: `http://localhost:5002/auth/callback`
 - OAuth discovery: `http://localhost:5002/.well-known/oauth-authorization-server`
@@ -47,3 +53,15 @@ MCP clients can automatically discover the authentication requirements and initi
 - Dynamic Client Registration (DCR)
 - Authorization code flow with PKCE
 - Token exchange and validation
+
+### 5. Test with REST Client
+
+Open `azure-ad-auth-tests.rest` in VS Code with the REST Client extension to test the complete OAuth flow manually.
+
+## Features Demonstrated
+
+- **OAuth Proxy Pattern**: Enables DCR for Azure AD
+- **Token Verification**: Validates Azure AD JWT tokens
+- **Protected Tools**: Tools with `[Authorize]` attribute require authentication
+- **User Claims**: Access authenticated user information
+- **Default Scopes**: Automatically includes `openid`, `profile`, `email`, `offline_access`

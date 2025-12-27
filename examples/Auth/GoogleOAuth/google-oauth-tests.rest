@@ -1,0 +1,290 @@
+### Google OAuth Authentication Tests for DotnetFastMCP
+### Configuration Reference: README.md
+### This file tests the complete Google OAuth authentication flow
+### 
+### Prerequisites:
+### 1. Google Cloud project with OAuth 2.0 credentials
+### 2. Environment variables set:
+###    - FASTMCP_SERVER_AUTH_GOOGLE_CLIENT_ID
+###    - FASTMCP_SERVER_AUTH_GOOGLE_CLIENT_SECRET
+### 3. DotnetFastMCP server running on http://localhost:5002
+### 4. VS Code REST Client extension installed
+
+### ============================================================================
+### VARIABLES SECTION
+### Update these variables based on your Google Cloud configuration
+### ============================================================================
+
+### Server Configuration
+@baseUrl = http://localhost:5002
+@mcpEndpoint = {{baseUrl}}/mcp
+@oauthCallbackUrl = {{baseUrl}}/auth/callback
+
+### Google OAuth Configuration
+@clientId = your-google-client-id.apps.googleusercontent.com
+@clientSecret = your-google-client-secret
+@requiredScopes = openid,profile,email
+
+### Computed URLs
+@googleAuthority = https://accounts.google.com
+@googleTokenEndpoint = https://oauth2.googleapis.com/token
+@googleAuthorizeEndpoint = https://accounts.google.com/o/oauth2/v2/auth
+@googleApiUrl = https://www.googleapis.com/oauth2/v1
+
+### Token Variables (Populate after obtaining tokens)
+@accessToken =
+@refreshToken =
+@authorizationCode =
+@idToken =
+
+### ============================================================================
+### SECTION 1: DISCOVERY ENDPOINTS
+### ============================================================================
+
+### 1.1 Get OAuth Authorization Server Metadata
+GET {{baseUrl}}/.well-known/oauth-authorization-server
+Accept: application/json
+
+### 1.2 Get OpenID Connect Configuration
+GET {{baseUrl}}/.well-known/openid-configuration
+Accept: application/json
+
+### 1.3 Get Protected Resource Metadata
+GET {{baseUrl}}/mcp/.well-known/protected-resource
+Accept: application/json
+
+### 1.4 Get JWKS (JSON Web Key Set)
+GET {{baseUrl}}/.well-known/jwks.json
+Accept: application/json
+
+### ============================================================================
+### SECTION 2: PUBLIC ENDPOINTS (NO AUTHENTICATION REQUIRED)
+### ============================================================================
+
+### 2.1 Test Public Tool - Add Numbers
+POST {{mcpEndpoint}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "method": "Add",
+  "params": [10, 5],
+  "id": 1
+}
+
+### 2.2 Test Public Tool - Get Server Status
+POST {{mcpEndpoint}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetStatus",
+  "params": [],
+  "id": 2
+}
+
+### ============================================================================
+### SECTION 3: PROTECTED ENDPOINTS (AUTHENTICATION REQUIRED)
+### ============================================================================
+
+### 3.1 Try Protected Tool WITHOUT Token (Should Fail with 401)
+POST {{mcpEndpoint}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetUserInfo",
+  "params": [],
+  "id": 3
+}
+
+### 3.2 Try Protected Tool WITH Invalid Token (Should Fail with 401)
+POST {{mcpEndpoint}}
+Content-Type: application/json
+Authorization: Bearer invalid-token-12345
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetUserInfo",
+  "params": [],
+  "id": 4
+}
+
+### 3.3 Get Authenticated User Info (Requires Valid Google Token)
+POST {{mcpEndpoint}}
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetUserInfo",
+  "params": [],
+  "id": 5
+}
+
+### ============================================================================
+### SECTION 4: OAUTH AUTHORIZATION CODE FLOW
+### ============================================================================
+
+### 4.1 Step 1 - MANUAL: Get Authorization Code
+### Navigate to this URL in your browser and authenticate with Google
+### 
+### URL:
+ https://accounts.google.com/o/oauth2/v2/auth?
+   client_id={{clientId}}&
+   response_type=code&
+   scope=openid%20profile%20email%20https://www.googleapis.com/auth/userinfo.profile&
+   redirect_uri={{oauthCallbackUrl}}&
+   state=random-state-value&
+   access_type=offline&
+   prompt=consent
+###
+### After successful authentication, you'll be redirected to:
+### {{oauthCallbackUrl}}?code=YOUR_CODE&state=random-state-value
+###
+### Note: You'll see an error page. Copy the 'code' parameter from the URL bar
+### and update @authorizationCode variable above
+
+### 4.2 Step 2 - Exchange Authorization Code for Access Token
+POST {{googleTokenEndpoint}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&
+client_id={{clientId}}&
+client_secret={{clientSecret}}&
+code={{authorizationCode}}&
+redirect_uri={{oauthCallbackUrl}}
+
+### 4.3 Step 3 - Refresh Access Token (Using Refresh Token)
+POST {{googleTokenEndpoint}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=refresh_token&
+client_id={{clientId}}&
+client_secret={{clientSecret}}&
+refresh_token={{refreshToken}}
+
+### ============================================================================
+### SECTION 5: GOOGLE API INTEGRATION
+### ============================================================================
+
+### 5.1 Get Current User Profile
+GET {{googleApiUrl}}/userinfo
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### 5.2 Get User Info (Alternative Endpoint)
+GET https://www.googleapis.com/oauth2/v3/userinfo
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ============================================================================
+### SECTION 6: OAUTH PROXY ENDPOINTS
+### ============================================================================
+
+### 6.1 Discover OAuth Proxy Endpoints
+GET {{baseUrl}}/.well-known/oauth-authorization-server
+Accept: application/json
+
+### 6.2 Proxy Authorization Request
+# @no-redirect
+GET {{baseUrl}}/oauth/authorize?client_id={{clientId}}&response_type=code&scope=openid%20profile%20email&redirect_uri={{oauthCallbackUrl}}&state=random-state-value
+Accept: application/json
+
+### 6.3 Proxy Token Exchange
+# @name proxyTokenExchange
+POST {{baseUrl}}/oauth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&code={{authorizationCode}}&redirect_uri={{oauthCallbackUrl}}
+
+### 6.4 Proxy Userinfo Endpoint
+GET {{baseUrl}}/oauth/userinfo
+Authorization: Bearer {{proxyTokenExchange.response.body.id_token}}
+Accept: application/json
+
+### ============================================================================
+### SECTION 7: DYNAMIC CLIENT REGISTRATION (DCR)
+### ============================================================================
+
+### 7.1 Register New OAuth Client via DCR
+POST {{baseUrl}}/oauth/register
+Content-Type: application/json
+
+{
+  "client_name": "DotnetFastMCP Google Test Client",
+  "description": "Test client for Google OAuth with FastMCP",
+  "redirect_uris": [
+    "http://localhost:5002/auth/callback"
+  ],
+  "grant_types": [
+    "authorization_code",
+    "refresh_token"
+  ],
+  "response_types": [
+    "code"
+  ],
+  "scope": "openid profile email",
+  "token_endpoint_auth_method": "client_secret_basic"
+}
+
+### ============================================================================
+### SECTION 8: SECURITY & RATE LIMITING TESTS
+### ============================================================================
+
+### 8.1 Test Rate Limiting - Token Endpoint Request
+POST {{baseUrl}}/oauth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=refresh_token&refresh_token=invalid-refresh-token
+
+### 8.2 Test CORS Preflight Request
+OPTIONS {{mcpEndpoint}}
+Origin: http://localhost:3000
+Access-Control-Request-Method: POST
+Access-Control-Request-Headers: content-type, authorization
+
+### ============================================================================
+### TESTING WORKFLOW
+### ============================================================================
+###
+### STEP 1: Setup Google Cloud Project
+### □ Create project in Google Cloud Console
+### □ Enable Google+ API
+### □ Create OAuth 2.0 credentials
+### □ Set Redirect URI to: {{oauthCallbackUrl}}
+### □ Note: Client ID and Client Secret
+###
+### STEP 2: Configure Environment Variables
+### □ Set FASTMCP_SERVER_AUTH_GOOGLE_CLIENT_ID
+### □ Set FASTMCP_SERVER_AUTH_GOOGLE_CLIENT_SECRET
+###
+### STEP 3: Start the Server
+### □ Run: dotnet run from examples/Auth/GoogleOAuth
+### □ Verify: Server starts on http://localhost:5002
+###
+### STEP 4: Update REST Client Variables
+### □ Update @clientId with your Client ID
+### □ Update @clientSecret with your Client Secret
+###
+### STEP 5: Execute Tests in Order
+### □ Run Section 1 - Discovery Endpoints
+### □ Run Section 2 - Public Tools
+### □ Run Section 3.1-3.2 - Protected Tools without token (Should fail)
+### □ Run Section 4.1 - Get Authorization Code (Manual browser step)
+### □ Run Section 4.2 - Exchange code for token
+### □ Update @accessToken variable
+### □ Run Section 3.3 - Protected Tools with token (Should succeed)
+### □ Run Section 5 - Google API Tests
+###
+### TROUBLESHOOTING
+### • 401 Unauthorized: Token expired or invalid
+###   → Get new token from Section 4.2
+### • 403 Forbidden: Missing required scopes
+###   → Check scopes in Google Cloud Console
+### • Redirect URI mismatch: Must match exactly
+###   → Verify in Google Cloud Console
+
+### ============================================================================
+### END OF GOOGLE OAUTH AUTHENTICATION TESTS
+### ============================================================================

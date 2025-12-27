@@ -18,29 +18,28 @@ Demonstrates FastMCP server protection with Google OAuth using OAuth Proxy patte
 
 ### 2. Configuration
 
-Create an `appsettings.json` file:
+Set environment variables:
 
-{
-  "Authentication": {
-    "Google": {
-      "ClientId": "your-client-id.apps.googleusercontent.com",
-      "ClientSecret": "your-client-secret",
-      "RequiredScopes": ["openid", "email", "profile"]
-    }
-  },
-  "BaseUrl": "http://localhost:5000"
-}Or set environment variables:
-
+```powershell
 # Windows PowerShell
 $env:FASTMCP_SERVER_AUTH_GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
 $env:FASTMCP_SERVER_AUTH_GOOGLE_CLIENT_SECRET="your-client-secret"
+```
 
+```bash
 # Linux/Mac
 export FASTMCP_SERVER_AUTH_GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
-export FASTMCP_SERVER_AUTH_GOOGLE_CLIENT_SECRET="your-client-secret"### 3. Run the Server
+export FASTMCP_SERVER_AUTH_GOOGLE_CLIENT_SECRET="your-client-secret"
+```
 
+### 3. Run the Server
+
+```bash
 cd examples/Auth/GoogleOAuth
-dotnet runThe server will start on `http://localhost:5000` with:
+dotnet run
+```
+
+The server will start on `http://localhost:5000` with:
 - MCP endpoint: `http://localhost:5000/mcp`
 - OAuth callback: `http://localhost:5000/auth/callback`
 - OAuth discovery: `http://localhost:5000/.well-known/oauth-authorization-server`
@@ -52,9 +51,14 @@ MCP clients can automatically discover the authentication requirements and initi
 - Authorization code flow with PKCE
 - Token exchange and validation
 
+### 5. Test with REST Client
+
+Open `google-oauth-tests.rest` in VS Code with the REST Client extension to test the complete OAuth flow manually.
+
 ## Features Demonstrated
 
 - **OAuth Proxy Pattern**: Enables DCR for non-DCR providers
 - **Token Verification**: Validates Google OAuth tokens
 - **Protected Tools**: Tools with `[Authorize]` attribute require authentication
 - **User Claims**: Access authenticated user information
+- **Default Scopes**: Automatically includes `openid`, `profile`, `email`, `https://www.googleapis.com/auth/userinfo.profile`

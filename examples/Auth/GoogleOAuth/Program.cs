@@ -10,11 +10,11 @@ try
     var mcpServer = new FastMCPServer(name: "Google OAuth Example Server");
     var builder = McpServerBuilder.Create(mcpServer, args);
     
-    // Configure Google OAuth using OAuth Proxy (for non-DCR provider)
-    builder.AddGoogleOAuthProxy();
+    // Configure Google OAuth authentication with OAuth Proxy
+    builder.AddGoogleTokenVerifier();
     
-    // Alternative: Use token verifier only (if you already have tokens)
-    // builder.AddGoogleTokenVerifier();
+    // Note: AddGoogleTokenVerifier now automatically configures OAuth Proxy
+    // if FASTMCP_SERVER_AUTH_GOOGLE_CLIENT_ID and FASTMCP_SERVER_AUTH_GOOGLE_CLIENT_SECRET are set
     
     builder.WithComponentsFrom(Assembly.GetExecutingAssembly());
     Console.WriteLine($"[GoogleOAuthServer] Registered {mcpServer.Tools.Count} tools and {mcpServer.Resources.Count} resources");

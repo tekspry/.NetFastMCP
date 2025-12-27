@@ -24,11 +24,11 @@
 @oauthCallbackUrl = {{baseUrl}}/client-callback
 
 ### Azure AD Configuration (from environment variables in README.md)
-@tenantId = <add your id>
-@clientId = <add your id>
-@clientSecret = <add your secret>
+@tenantId = <Add Tenant Id>
+@clientId = <Add client Id>
+@clientSecret = <Add client secret>
 @baseAuthority = login.microsoftonline.com
-@requiredScopes = openid,profile,email
+@requiredScopes = openid,profile,email,User.Read
 
 ### Computed URLs
 @azureAuthority = https://{{baseAuthority}}
@@ -37,10 +37,10 @@
 @graphApiUrl = https://graph.microsoft.com/v1.0
 
 ### Token Variables (Populate after obtaining tokens)
-@accessToken =<add your token>
-@refreshToken =<add your token>
-@authorizationCode =<add your code>
-@idToken =<add your token>
+@accessToken =<Add Token>
+@refreshToken =<Add token>
+@authorizationCode =<Add Auth Code`>
+@idToken =<Add Token>
 
 ### ============================================================================
 ### SECTION 1: DISCOVERY ENDPOINTS (RFC 8414 & RFC 9728)
@@ -182,7 +182,7 @@ Authorization: Bearer {{idToken}}
  https://login.microsoftonline.com/c83b22b0-565b-4b46-ac74-550176cf4e54/oauth2/v2.0/authorize?
    client_id=861bccf9-41f8-4507-b486-5e564d917dd0&
    response_type=code&
-   scope=openid%20profile%20email%20offline_access&
+   scope=openid%20profile%20email%20offline_access%20User.Read&
    redirect_uri=http://localhost:5002/auth/callback&
    state=random-state-value&
    response_mode=query
@@ -201,8 +201,8 @@ grant_type=authorization_code&
 client_id={{clientId}}&
 client_secret={{clientSecret}}&
 code={{authorizationCode}}&
-redirect_uri={{oauthCallbackUrl}}&
-scope=openid%20profile%20email%20offline_access
+redirect_uri=http://localhost:5002/auth/callback&
+scope=openid%20profile%20email%20offline_access%20User.Read
 
 ### 4.3 Step 3 - Refresh Access Token (Using Refresh Token)
 ### Once you have a refresh token from Step 2, use it here
@@ -213,7 +213,7 @@ grant_type=refresh_token&
 client_id={{clientId}}&
 client_secret={{clientSecret}}&
 refresh_token={{refreshToken}}&
-scope=openid%20profile%20email
+scope=openid%20profile%20email%20User.Read
 
 ### 4.4 Step 4 - Decode ID Token at jwt.io
 ### After obtaining token in Step 2, copy the id_token value
@@ -344,23 +344,16 @@ Accept: application/json
 ### 8.1 Test Rate Limiting - Token Endpoint Request
 ### NOTE: May be rate limited depending on server configuration
 POST {{baseUrl}}/oauth/token
-Content-Type: application/json
+Content-Type: application/x-www-form-urlencoded
 
-{
-  "grant_type": "refresh_token",
-  "refresh_token": "invalid-refresh-token"
-}
+grant_type=refresh_token&refresh_token=invalid-refresh-token
 
 ### 8.2 Test Rate Limiting - Rapid Requests (Run multiple times)
 ### After 10 requests in 1 minute to /oauth/token, expect 429 Too Many Requests
 POST {{baseUrl}}/oauth/token
-Content-Type: application/json
+Content-Type: application/x-www-form-urlencoded
 
-{
-  "grant_type": "password",
-  "username": "user@example.com",
-  "password": "invalid"
-}
+grant_type=password&username=user@example.com&password=invalid
 
 ### 8.3 Test CORS Preflight Request
 ### Verifies CORS is configured to allow cross-origin requests
@@ -412,7 +405,7 @@ grant_type=authorization_code&
 client_id={{clientId}}&
 client_secret={{clientSecret}}&
 code={{authorizationCode}}&
-redirect_uri={{oauthCallbackUrl}}&
+redirect_uri=http://localhost:5002/auth/callback&
 scope=openid%20profile%20email%20user.read
 
 ### 9.2 Test Incremental Consent

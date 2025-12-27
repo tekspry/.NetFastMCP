@@ -1,0 +1,229 @@
+### Okta OAuth Authentication Tests for DotnetFastMCP
+### Configuration Reference: README.md
+### This file tests the complete Okta OAuth authentication flow
+### 
+### Prerequisites:
+### 1. Okta developer account and application configured
+### 2. Environment variables set:
+###    - FASTMCP_SERVER_AUTH_OKTA_DOMAIN
+###    - FASTMCP_SERVER_AUTH_OKTA_CLIENT_ID
+###    - FASTMCP_SERVER_AUTH_OKTA_CLIENT_SECRET
+###    - FASTMCP_SERVER_AUTH_OKTA_AUDIENCE
+### 3. DotnetFastMCP server running on http://localhost:5002
+### 4. VS Code REST Client extension installed
+
+### ============================================================================
+### VARIABLES SECTION
+### ============================================================================
+
+### Server Configuration
+@baseUrl = http://localhost:5002
+@mcpEndpoint = {{baseUrl}}/mcp
+@oauthCallbackUrl = {{baseUrl}}/auth/callback
+
+### Okta Configuration
+@oktaDomain = your-domain.okta.com
+@clientId = your-okta-client-id
+@clientSecret = your-okta-client-secret
+@audience = api://default
+@requiredScopes = openid,profile,email
+
+### Computed URLs
+@oktaAuthority = https://{{oktaDomain}}
+@oktaTokenEndpoint = {{oktaAuthority}}/oauth2/default/v1/token
+@oktaAuthorizeEndpoint = {{oktaAuthority}}/oauth2/default/v1/authorize
+@oktaUserinfoEndpoint = {{oktaAuthority}}/oauth2/default/v1/userinfo
+@oktaIntrospectEndpoint = {{oktaAuthority}}/oauth2/default/v1/introspect
+
+### Token Variables
+@accessToken =
+@refreshToken =
+@authorizationCode =
+@idToken =
+
+### ============================================================================
+### SECTION 1: DISCOVERY ENDPOINTS
+### ============================================================================
+
+### 1.1 Get Okta OpenID Configuration
+GET {{oktaAuthority}}/oauth2/default/.well-known/openid-configuration
+Accept: application/json
+
+### 1.2 Get Okta JWKS
+GET {{oktaAuthority}}/oauth2/default/v1/keys
+Accept: application/json
+
+### 1.3 Get Server OAuth Metadata
+GET {{baseUrl}}/.well-known/oauth-authorization-server
+Accept: application/json
+
+### ============================================================================
+### SECTION 2: PUBLIC ENDPOINTS
+### ============================================================================
+
+### 2.1 Test Public Tool
+POST {{mcpEndpoint}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetStatus",
+  "params": [],
+  "id": 1
+}
+
+### ============================================================================
+### SECTION 3: PROTECTED ENDPOINTS
+### ============================================================================
+
+### 3.1 Try Protected Tool WITHOUT Token (Should Fail)
+POST {{mcpEndpoint}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetUserInfo",
+  "params": [],
+  "id": 2
+}
+
+### 3.2 Get Authenticated User Info (Requires Valid Okta Token)
+POST {{mcpEndpoint}}
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetUserInfo",
+  "params": [],
+  "id": 3
+}
+
+### ============================================================================
+### SECTION 4: OAUTH AUTHORIZATION CODE FLOW
+### ============================================================================
+
+### 4.1 Step 1 - MANUAL: Get Authorization Code
+### Navigate to this URL in your browser
+### 
+### URL:
+ https://{{oktaDomain}}/oauth2/default/v1/authorize?
+   client_id={{clientId}}&
+   response_type=code&
+   scope=openid%20profile%20email%20offline_access&
+   redirect_uri={{oauthCallbackUrl}}&
+   state=random-state-value
+###
+### After authentication, you'll be redirected to:
+### {{oauthCallbackUrl}}?code=YOUR_CODE&state=random-state-value
+###
+### Copy the 'code' parameter from the URL bar
+
+### 4.2 Step 2 - Exchange Authorization Code for Access Token
+POST {{oktaTokenEndpoint}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&
+client_id={{clientId}}&
+client_secret={{clientSecret}}&
+code={{authorizationCode}}&
+redirect_uri={{oauthCallbackUrl}}
+
+### 4.3 Step 3 - Refresh Access Token
+POST {{oktaTokenEndpoint}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=refresh_token&
+client_id={{clientId}}&
+client_secret={{clientSecret}}&
+refresh_token={{refreshToken}}
+
+### ============================================================================
+### SECTION 5: OKTA API INTEGRATION
+### ============================================================================
+
+### 5.1 Get User Info from Okta
+GET {{oktaUserinfoEndpoint}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### 5.2 Introspect Token
+POST {{oktaIntrospectEndpoint}}
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic {{base64(clientId:clientSecret)}}
+
+token={{accessToken}}&
+token_type_hint=access_token
+
+### 5.3 Get Current User Profile (Okta API)
+### Note: Requires API token with appropriate scopes
+GET https://{{oktaDomain}}/api/v1/users/me
+Authorization: SSWS {{apiToken}}
+Accept: application/json
+
+### ============================================================================
+### SECTION 6: CLIENT CREDENTIALS FLOW
+### ============================================================================
+
+### 6.1 Get Access Token via Client Credentials
+POST {{oktaTokenEndpoint}}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&
+client_id={{clientId}}&
+client_secret={{clientSecret}}&
+scope=custom_scope
+
+### ============================================================================
+### SECTION 7: TOKEN MANAGEMENT
+### ============================================================================
+
+### 7.1 Revoke Access Token
+POST {{oktaAuthority}}/oauth2/default/v1/revoke
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic {{base64(clientId:clientSecret)}}
+
+token={{accessToken}}&
+token_type_hint=access_token
+
+### 7.2 Revoke Refresh Token
+POST {{oktaAuthority}}/oauth2/default/v1/revoke
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic {{base64(clientId:clientSecret)}}
+
+token={{refreshToken}}&
+token_type_hint=refresh_token
+
+### ============================================================================
+### TESTING WORKFLOW
+### ============================================================================
+###
+### STEP 1: Setup Okta Application
+### □ Create Okta developer account at https://developer.okta.com
+### □ Create new application (Web Application)
+### □ Configure Sign-in redirect URIs: {{oauthCallbackUrl}}
+### □ Configure Sign-out redirect URIs
+### □ Note: Domain, Client ID, Client Secret
+### □ Assign users to application
+###
+### STEP 2: Configure Environment Variables
+### □ Set FASTMCP_SERVER_AUTH_OKTA_DOMAIN
+### □ Set FASTMCP_SERVER_AUTH_OKTA_CLIENT_ID
+### □ Set FASTMCP_SERVER_AUTH_OKTA_CLIENT_SECRET
+### □ Set FASTMCP_SERVER_AUTH_OKTA_AUDIENCE
+###
+### STEP 3: Execute Tests
+### □ Run Section 4.1 - Get Authorization Code
+### □ Run Section 4.2 - Exchange for token
+### □ Update @accessToken
+### □ Run Section 5 - Okta API Tests
+###
+### TROUBLESHOOTING
+### • 401 Unauthorized: Token invalid or expired
+### • 403 Forbidden: User not assigned to application
+### • Redirect URI mismatch: Verify in Okta Application settings
+### • Invalid issuer: Ensure authorization server is correct
+
+### ============================================================================
+### END OF OKTA OAUTH AUTHENTICATION TESTS
+### ============================================================================

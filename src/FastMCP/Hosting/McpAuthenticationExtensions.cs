@@ -273,8 +273,42 @@ public static class McpAuthenticationExtensions
                     authBuilder.AddTokenVerifier("Google", tokenVerifier);
                 });
 
+
                 SetDefaultChallengeScheme(builder, "Google");
                 logger?.LogInformation("Google token verifier authentication configured successfully");
+
+                // Configure default OAuth Proxy options for Google
+                var defaultProxyOptions = new OAuthProxyOptions
+                {
+                    BaseUrl = "http://localhost:5002",
+                    UpstreamClientId = clientId,
+                    UpstreamClientSecret = clientSecret,
+                    UpstreamAuthorizationEndpoint = "https://accounts.google.com/o/oauth2/v2/auth",
+                    UpstreamTokenEndpoint = "https://oauth2.googleapis.com/token",
+                    UpstreamRevocationEndpoint = "https://oauth2.googleapis.com/revoke",
+                    ValidScopes = requiredScopes?.ToList() ?? new List<string> 
+                    { 
+                        "openid", 
+                        "profile", 
+                        "email", 
+                        "https://www.googleapis.com/auth/userinfo.profile" 
+                    }
+                };
+
+                // Create a client store and register this client
+                var clientStore = new InMemoryClientStore();
+                var clientRegistration = new OAuthClientRegistration
+                {
+                    ClientId = clientId,
+                    ClientSecret = clientSecret,
+                    RedirectUris = new List<string> { "http://localhost:5002/auth/callback" },
+                    AllowedRedirectUriPatterns = new List<string> { "http://localhost:*/auth/callback" }
+                };
+                clientStore.StoreClientAsync(clientId, clientRegistration).GetAwaiter().GetResult();
+
+                // Register OAuth Proxy with the pre-configured client store
+                builder.WithOAuthProxy(defaultProxyOptions, tokenVerifier, clientStore);
+
             }
             catch (Exception ex)
             {
@@ -328,8 +362,40 @@ public static class McpAuthenticationExtensions
                     authBuilder.AddTokenVerifier("GitHub", tokenVerifier);
                 });
 
+
                 SetDefaultChallengeScheme(builder, "GitHub");
                 logger?.LogInformation("GitHub token verifier authentication configured successfully");
+
+                // Configure default OAuth Proxy options for GitHub
+                var defaultProxyOptions = new OAuthProxyOptions
+                {
+                    BaseUrl = "http://localhost:5002",
+                    UpstreamClientId = clientId,
+                    UpstreamClientSecret = clientSecret,
+                    UpstreamAuthorizationEndpoint = "https://github.com/login/oauth/authorize",
+                    UpstreamTokenEndpoint = "https://github.com/login/oauth/access_token",
+                    // GitHub doesn't have a standard revocation endpoint
+                    ValidScopes = requiredScopes?.ToList() ?? new List<string> 
+                    { 
+                        "read:user", 
+                        "user:email" 
+                    }
+                };
+
+                // Create a client store and register this client
+                var clientStore = new InMemoryClientStore();
+                var clientRegistration = new OAuthClientRegistration
+                {
+                    ClientId = clientId,
+                    ClientSecret = clientSecret,
+                    RedirectUris = new List<string> { "http://localhost:5002/auth/callback" },
+                    AllowedRedirectUriPatterns = new List<string> { "http://localhost:*/auth/callback" }
+                };
+                clientStore.StoreClientAsync(clientId, clientRegistration).GetAwaiter().GetResult();
+
+                // Register OAuth Proxy with the pre-configured client store
+                builder.WithOAuthProxy(defaultProxyOptions, tokenVerifier, clientStore);
+
             }
             catch (Exception ex)
             {
@@ -451,6 +517,9 @@ public static class McpAuthenticationExtensions
 
         var userPoolId = GetConfigValue(config, "FASTMCP_SERVER_AUTH_AWSCOGNITO_USER_POOL_ID", "AwsCognito:UserPoolId");
         var region = GetConfigValue(config, "FASTMCP_SERVER_AUTH_AWSCOGNITO_REGION", "AwsCognito:Region");
+        var clientId = GetConfigValue(config, "FASTMCP_SERVER_AUTH_AWSCOGNITO_CLIENT_ID", "AwsCognito:ClientId");
+        var clientSecret = GetConfigValue(config, "FASTMCP_SERVER_AUTH_AWSCOGNITO_CLIENT_SECRET", "AwsCognito:ClientSecret");
+        var cognitoDomain = GetConfigValue(config, "FASTMCP_SERVER_AUTH_AWSCOGNITO_DOMAIN", "AwsCognito:Domain");
         var requiredScopes = options?.RequiredScopes;
 
         if (!string.IsNullOrEmpty(userPoolId) && !string.IsNullOrEmpty(region))
@@ -476,6 +545,40 @@ public static class McpAuthenticationExtensions
 
                 SetDefaultChallengeScheme(builder, "AwsCognito");
                 logger?.LogInformation("AWS Cognito token verifier authentication configured successfully");
+
+                // Configure OAuth Proxy if client credentials and domain are available
+                if (!string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(clientSecret) && !string.IsNullOrEmpty(cognitoDomain))
+                {
+                    var defaultProxyOptions = new OAuthProxyOptions
+                    {
+                        BaseUrl = "http://localhost:5002",
+                        UpstreamClientId = clientId,
+                        UpstreamClientSecret = clientSecret,
+                        UpstreamAuthorizationEndpoint = $"https://{cognitoDomain}/oauth2/authorize",
+                        UpstreamTokenEndpoint = $"https://{cognitoDomain}/oauth2/token",
+                        UpstreamRevocationEndpoint = $"https://{cognitoDomain}/oauth2/revoke",
+                        ValidScopes = requiredScopes?.ToList() ?? new List<string> 
+                        { 
+                            "openid", 
+                            "profile", 
+                            "email" 
+                        }
+                    };
+
+                    var clientStore = new InMemoryClientStore();
+                    var clientRegistration = new OAuthClientRegistration
+                    {
+                        ClientId = clientId,
+                        ClientSecret = clientSecret,
+                        RedirectUris = new List<string> { "http://localhost:5002/auth/callback" },
+                        AllowedRedirectUriPatterns = new List<string> { "http://localhost:*/auth/callback" }
+                    };
+                    clientStore.StoreClientAsync(clientId, clientRegistration).GetAwaiter().GetResult();
+
+                    builder.WithOAuthProxy(defaultProxyOptions, tokenVerifier, clientStore);
+                    logger?.LogInformation("AWS Cognito OAuth Proxy configured successfully");
+                }
+
             }
             catch (Exception ex)
             {
@@ -504,6 +607,8 @@ public static class McpAuthenticationExtensions
 
         var domain = GetConfigValue(config, "FASTMCP_SERVER_AUTH_AUTH0_DOMAIN", "Auth0:Domain");
         var audience = GetConfigValue(config, "FASTMCP_SERVER_AUTH_AUTH0_AUDIENCE", "Auth0:Audience");
+        var clientId = GetConfigValue(config, "FASTMCP_SERVER_AUTH_AUTH0_CLIENT_ID", "Auth0:ClientId");
+        var clientSecret = GetConfigValue(config, "FASTMCP_SERVER_AUTH_AUTH0_CLIENT_SECRET", "Auth0:ClientSecret");
         var requiredScopes = options?.RequiredScopes;
 
         if (!string.IsNullOrEmpty(domain) && !string.IsNullOrEmpty(audience))
@@ -528,6 +633,41 @@ public static class McpAuthenticationExtensions
 
                 SetDefaultChallengeScheme(builder, "Auth0");
                 logger?.LogInformation("Auth0 token verifier authentication configured successfully");
+
+                // Configure OAuth Proxy if client credentials are available
+                if (!string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(clientSecret))
+                {
+                    var defaultProxyOptions = new OAuthProxyOptions
+                    {
+                        BaseUrl = "http://localhost:5002",
+                        UpstreamClientId = clientId,
+                        UpstreamClientSecret = clientSecret,
+                        UpstreamAuthorizationEndpoint = $"https://{domain}/authorize",
+                        UpstreamTokenEndpoint = $"https://{domain}/oauth/token",
+                        UpstreamRevocationEndpoint = $"https://{domain}/oauth/revoke",
+                        ValidScopes = requiredScopes?.ToList() ?? new List<string> 
+                        { 
+                            "openid", 
+                            "profile", 
+                            "email", 
+                            "offline_access" 
+                        }
+                    };
+
+                    var clientStore = new InMemoryClientStore();
+                    var clientRegistration = new OAuthClientRegistration
+                    {
+                        ClientId = clientId,
+                        ClientSecret = clientSecret,
+                        RedirectUris = new List<string> { "http://localhost:5002/auth/callback" },
+                        AllowedRedirectUriPatterns = new List<string> { "http://localhost:*/auth/callback" }
+                    };
+                    clientStore.StoreClientAsync(clientId, clientRegistration).GetAwaiter().GetResult();
+
+                    builder.WithOAuthProxy(defaultProxyOptions, tokenVerifier, clientStore);
+                    logger?.LogInformation("Auth0 OAuth Proxy configured successfully");
+                }
+
             }
             catch (Exception ex)
             {
@@ -556,6 +696,8 @@ public static class McpAuthenticationExtensions
 
         var domain = GetConfigValue(config, "FASTMCP_SERVER_AUTH_OKTA_DOMAIN", "Okta:Domain");
         var audience = GetConfigValue(config, "FASTMCP_SERVER_AUTH_OKTA_AUDIENCE", "Okta:Audience");
+        var clientId = GetConfigValue(config, "FASTMCP_SERVER_AUTH_OKTA_CLIENT_ID", "Okta:ClientId");
+        var clientSecret = GetConfigValue(config, "FASTMCP_SERVER_AUTH_OKTA_CLIENT_SECRET", "Okta:ClientSecret");
         var requiredScopes = options?.RequiredScopes;
 
         if (!string.IsNullOrEmpty(domain) && !string.IsNullOrEmpty(audience))
@@ -580,6 +722,41 @@ public static class McpAuthenticationExtensions
 
                 SetDefaultChallengeScheme(builder, "Okta");
                 logger?.LogInformation("Okta token verifier authentication configured successfully");
+
+                // Configure OAuth Proxy if client credentials are available
+                if (!string.IsNullOrEmpty(clientId) && !string.IsNullOrEmpty(clientSecret))
+                {
+                    var defaultProxyOptions = new OAuthProxyOptions
+                    {
+                        BaseUrl = "http://localhost:5002",
+                        UpstreamClientId = clientId,
+                        UpstreamClientSecret = clientSecret,
+                        UpstreamAuthorizationEndpoint = $"https://{domain}/oauth2/default/v1/authorize",
+                        UpstreamTokenEndpoint = $"https://{domain}/oauth2/default/v1/token",
+                        UpstreamRevocationEndpoint = $"https://{domain}/oauth2/default/v1/revoke",
+                        ValidScopes = requiredScopes?.ToList() ?? new List<string> 
+                        { 
+                            "openid", 
+                            "profile", 
+                            "email", 
+                            "offline_access" 
+                        }
+                    };
+
+                    var clientStore = new InMemoryClientStore();
+                    var clientRegistration = new OAuthClientRegistration
+                    {
+                        ClientId = clientId,
+                        ClientSecret = clientSecret,
+                        RedirectUris = new List<string> { "http://localhost:5002/auth/callback" },
+                        AllowedRedirectUriPatterns = new List<string> { "http://localhost:*/auth/callback" }
+                    };
+                    clientStore.StoreClientAsync(clientId, clientRegistration).GetAwaiter().GetResult();
+
+                    builder.WithOAuthProxy(defaultProxyOptions, tokenVerifier, clientStore);
+                    logger?.LogInformation("Okta OAuth Proxy configured successfully");
+                }
+
             }
             catch (Exception ex)
             {

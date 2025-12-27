@@ -10,8 +10,8 @@ try
     var mcpServer = new FastMCPServer(name: "GitHub OAuth Example Server");
     var builder = McpServerBuilder.Create(mcpServer, args);
     
-    // Configure GitHub OAuth using OAuth Proxy
-    builder.AddGitHubOAuthProxy();
+    // Configure GitHub OAuth authentication with OAuth Proxy
+    builder.AddGitHubTokenVerifier();
     
     builder.WithComponentsFrom(Assembly.GetExecutingAssembly());
     Console.WriteLine($"[GitHubOAuthServer] Registered {mcpServer.Tools.Count} tools");

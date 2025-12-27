@@ -1,0 +1,201 @@
+### GitHub OAuth Authentication Tests for DotnetFastMCP
+### Configuration Reference: README.md
+### This file tests the complete GitHub OAuth authentication flow
+### 
+### Prerequisites:
+### 1. GitHub OAuth App registered
+### 2. Environment variables set:
+###    - FASTMCP_SERVER_AUTH_GITHUB_CLIENT_ID
+###    - FASTMCP_SERVER_AUTH_GITHUB_CLIENT_SECRET
+### 3. DotnetFastMCP server running on http://localhost:5002
+### 4. VS Code REST Client extension installed
+
+### ============================================================================
+### VARIABLES SECTION
+### ============================================================================
+
+### Server Configuration
+@baseUrl = http://localhost:5002
+@mcpEndpoint = {{baseUrl}}/mcp
+@oauthCallbackUrl = {{baseUrl}}/auth/callback
+
+### GitHub OAuth Configuration
+@clientId = your-github-client-id
+@clientSecret = your-github-client-secret
+@requiredScopes = read:user,user:email
+
+### Computed URLs
+@githubAuthority = https://github.com
+@githubTokenEndpoint = https://github.com/login/oauth/access_token
+@githubAuthorizeEndpoint = https://github.com/login/oauth/authorize
+@githubApiUrl = https://api.github.com
+
+### Token Variables
+@accessToken =
+@authorizationCode =
+
+### ============================================================================
+### SECTION 1: DISCOVERY ENDPOINTS
+### ============================================================================
+
+### 1.1 Get OAuth Authorization Server Metadata
+GET {{baseUrl}}/.well-known/oauth-authorization-server
+Accept: application/json
+
+### 1.2 Get Protected Resource Metadata
+GET {{baseUrl}}/mcp/.well-known/protected-resource
+Accept: application/json
+
+### ============================================================================
+### SECTION 2: PUBLIC ENDPOINTS
+### ============================================================================
+
+### 2.1 Test Public Tool
+POST {{mcpEndpoint}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetStatus",
+  "params": [],
+  "id": 1
+}
+
+### ============================================================================
+### SECTION 3: PROTECTED ENDPOINTS
+### ============================================================================
+
+### 3.1 Try Protected Tool WITHOUT Token (Should Fail)
+POST {{mcpEndpoint}}
+Content-Type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetUserInfo",
+  "params": [],
+  "id": 2
+}
+
+### 3.2 Get Authenticated User Info (Requires Valid GitHub Token)
+POST {{mcpEndpoint}}
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "jsonrpc": "2.0",
+  "method": "GetUserInfo",
+  "params": [],
+  "id": 3
+}
+
+### ============================================================================
+### SECTION 4: OAUTH AUTHORIZATION CODE FLOW
+### ============================================================================
+
+### 4.1 Step 1 - MANUAL: Get Authorization Code
+### Navigate to this URL in your browser
+### 
+### URL:
+ https://github.com/login/oauth/authorize?
+   client_id={{clientId}}&
+   redirect_uri={{oauthCallbackUrl}}&
+   scope=read:user%20user:email&
+   state=random-state-value
+###
+### After authentication, you'll be redirected to:
+### {{oauthCallbackUrl}}?code=YOUR_CODE&state=random-state-value
+###
+### Copy the 'code' parameter from the URL bar
+
+### 4.2 Step 2 - Exchange Authorization Code for Access Token
+POST {{githubTokenEndpoint}}
+Content-Type: application/x-www-form-urlencoded
+Accept: application/json
+
+client_id={{clientId}}&
+client_secret={{clientSecret}}&
+code={{authorizationCode}}&
+redirect_uri={{oauthCallbackUrl}}
+
+### ============================================================================
+### SECTION 5: GITHUB API INTEGRATION
+### ============================================================================
+
+### 5.1 Get Current User Profile
+GET {{githubApiUrl}}/user
+Authorization: Bearer {{accessToken}}
+Accept: application/vnd.github+json
+X-GitHub-Api-Version: 2022-11-28
+
+### 5.2 Get User Emails
+GET {{githubApiUrl}}/user/emails
+Authorization: Bearer {{accessToken}}
+Accept: application/vnd.github+json
+X-GitHub-Api-Version: 2022-11-28
+
+### 5.3 Get User Repositories
+GET {{githubApiUrl}}/user/repos
+Authorization: Bearer {{accessToken}}
+Accept: application/vnd.github+json
+X-GitHub-Api-Version: 2022-11-28
+
+### 5.4 Get User Organizations
+GET {{githubApiUrl}}/user/orgs
+Authorization: Bearer {{accessToken}}
+Accept: application/vnd.github+json
+X-GitHub-Api-Version: 2022-11-28
+
+### ============================================================================
+### SECTION 6: OAUTH PROXY ENDPOINTS
+### ============================================================================
+
+### 6.1 Proxy Token Exchange
+POST {{baseUrl}}/oauth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&code={{authorizationCode}}&redirect_uri={{oauthCallbackUrl}}
+
+### ============================================================================
+### SECTION 7: DYNAMIC CLIENT REGISTRATION
+### ============================================================================
+
+### 7.1 Register New OAuth Client
+POST {{baseUrl}}/oauth/register
+Content-Type: application/json
+
+{
+  "client_name": "DotnetFastMCP GitHub Test Client",
+  "redirect_uris": ["{{oauthCallbackUrl}}"],
+  "grant_types": ["authorization_code"],
+  "response_types": ["code"],
+  "scope": "read:user user:email"
+}
+
+### ============================================================================
+### TESTING WORKFLOW
+### ============================================================================
+###
+### STEP 1: Setup GitHub OAuth App
+### □ Go to GitHub Settings → Developer settings → OAuth Apps
+### □ Click "New OAuth App"
+### □ Set Authorization callback URL: {{oauthCallbackUrl}}
+### □ Note: Client ID and Client Secret
+###
+### STEP 2: Configure Environment Variables
+### □ Set FASTMCP_SERVER_AUTH_GITHUB_CLIENT_ID
+### □ Set FASTMCP_SERVER_AUTH_GITHUB_CLIENT_SECRET
+###
+### STEP 3: Execute Tests
+### □ Run Section 4.1 - Get Authorization Code
+### □ Run Section 4.2 - Exchange for token
+### □ Update @accessToken
+### □ Run Section 5 - GitHub API Tests
+###
+### TROUBLESHOOTING
+### • 401 Unauthorized: Token invalid or expired
+### • 403 Forbidden: Missing required scopes
+### • Redirect URI mismatch: Verify in GitHub OAuth App settings
+
+### ============================================================================
+### END OF GITHUB OAUTH AUTHENTICATION TESTS
+### ============================================================================
