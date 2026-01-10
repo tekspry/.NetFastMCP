@@ -30,7 +30,34 @@ public class McpServerBuilder
     {
         _mcpServer = mcpServer;
         _webAppBuilder = WebApplication.CreateBuilder(args ?? Array.Empty<string>());
+        
+        bool isStdioMode = args?.Contains("--stdio") ?? false;
+        
+        // ... (Registration code) ...
+        // --- Logging Setup ---
+        _webAppBuilder.Services.AddLogging(config =>
+        {
+            if (isStdioMode)
+            {
+                config.ClearProviders(); // Critical: Remove default Console logger added by CreateBuilder
+            }
+            else
+            {
+                // Only add Console logger if NOT in Stdio mode
+                config.AddConsole();
+            }
+            
+            config.SetMinimumLevel(LogLevel.Information);
+            // ... filters ...
+        });
+        // --- End Logging Setup ---
+        
         _webAppBuilder.Services.AddSingleton(_mcpServer);
+
+         _webAppBuilder.Services.AddScoped<McpRequestHandler>();
+
+          // NEW: Register Stdio Transport
+        _webAppBuilder.Services.AddScoped<McpStdioTransport>();
 
         // --- Core Authentication and Authorization Setup ---
         _webAppBuilder.Services.AddAuthentication(options =>
@@ -94,16 +121,7 @@ public class McpServerBuilder
         });
         // --- End CORS Setup ---
 
-        // --- Logging Setup ---
-        _webAppBuilder.Services.AddLogging(config =>
-        {
-            config.AddConsole();
-            config.SetMinimumLevel(LogLevel.Information);
-            config.AddFilter("FastMCP.Authentication", LogLevel.Debug);
-            config.AddFilter("FastMCP.Authentication.Proxy", LogLevel.Debug);
-            config.AddFilter("FastMCP.Hosting", LogLevel.Debug); // Enable debug logs for McpAuthenticationExtensions
-        });
-        // --- End Logging Setup ---
+
     }
 
     /// <summary>
@@ -304,6 +322,8 @@ public class McpServerBuilder
 
         return app;
     }
+
+
 
     // Internal helper to expose the WebApplicationBuilder for extension methods
     internal WebApplicationBuilder GetWebAppBuilder()

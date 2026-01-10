@@ -4,9 +4,20 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <PackageId>DotnetFastMCP</PackageId>
+    <Version>1.1.0</Version> 
+    <Authors>TekSpry</Authors>
+    <Company>TekSpry</Company>    
     <Description>A .NET framework for building Model Context Protocol (MCP) servers quickly and easily.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/tekspry/DotnetFastMCP</RepositoryUrl>       
     <PackageTags>mcp;ai;dotnet;framework</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\"/>
+  </ItemGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

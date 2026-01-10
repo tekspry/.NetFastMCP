@@ -5,24 +5,22 @@ using BasicServer.Tools;
 
 try
 {
-    Console.WriteLine("[BasicServer] Starting...");
+    Console.Error.WriteLine("[BasicServer] Starting...");
     
     var mcpServer = new FastMCPServer(name: "My First Dotnet MCP Server");
     var builder = McpServerBuilder.Create(mcpServer, args);
     builder.WithComponentsFrom(Assembly.GetExecutingAssembly());
-    Console.WriteLine($"[BasicServer] Registered {mcpServer.Tools.Count} tools and {mcpServer.Resources.Count} resources");
+    
+    Console.Error.WriteLine($"[BasicServer] Registered {mcpServer.Tools.Count} tools and {mcpServer.Resources.Count} resources");
 
     var app = builder.Build();
-    Console.WriteLine("[BasicServer] App built, starting to run...");
-    Console.Out.Flush();
-    
-    await app.RunAsync();
-    
-    Console.WriteLine("[BasicServer] App finished running");
+    Console.Error.WriteLine("[BasicServer] App built, starting to run...");
+    await app.RunMcpAsync(args);
+    Console.Error.WriteLine("[BasicServer] App finished running");
 }
 catch (OperationCanceledException)
 {
-    Console.WriteLine("[BasicServer] App was cancelled");
+    Console.Error.WriteLine("[BasicServer] App was cancelled");
 }
 catch (Exception ex)
 {
