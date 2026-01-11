@@ -674,6 +674,7 @@ For bug reports and feature requests, please use [GitHub Issues](https://github.
 ## 🎯 Roadmap
 
 ### Core Functionality
+- [x] **Protocol Discovery** - Dynamic discovery of Tools, Resources, and Prompts
 - [x] **Context & Interaction** - Access logging, progress reporting, and client sampling via `Context` object
 - [x] **Stdio Transport** - Support for standard input/output transport (essential for Claude Desktop)
 - [ ] **SSE Transport** - Dedicated Server-Sent Events transport
