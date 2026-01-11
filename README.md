@@ -630,6 +630,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html)
 
 ### Framework Documentation
+- [Protocol Discovery Guide](Documentation/protocol-discovery-guide.md)
+- [Stdio Transport Guide](Documentation/stdio-transport-guide.md)
 - [ASP.NET Core Documentation](https://docs.microsoft.com/en-us/aspnet/core/)
 - [.NET 8.0 Documentation](https://docs.microsoft.com/en-us/dotnet/)
 

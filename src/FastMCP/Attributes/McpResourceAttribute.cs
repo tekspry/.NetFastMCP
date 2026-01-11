@@ -8,9 +8,13 @@ namespace FastMCP.Attributes;
 public sealed class McpResourceAttribute : Attribute
 {
     public string Uri { get; }
-
-    public McpResourceAttribute(string uri)
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public string? MimeType { get; set; }
+    
+    public McpResourceAttribute(string uri, string? name = null)
     {
         Uri = uri;
+        Name = name;
     }
 }

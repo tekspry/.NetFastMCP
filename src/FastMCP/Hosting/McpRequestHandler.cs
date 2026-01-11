@@ -34,6 +34,10 @@ public class McpRequestHandler
                     return await HandlePromptsListAsync(server, request);
                 case "prompts/get":
                     return await HandlePromptsGetAsync(server, request, user);
+                case "tools/list":
+                    return HandleToolsList(server, request);
+                case "resources/list": 
+                    return HandleResourcesList(server, request);
                 default:
                     return await HandleToolExecutionAsync(server, request, user);
             }
@@ -310,5 +314,55 @@ public class McpRequestHandler
                 throw new InvalidOperationException($"Missing required parameter: {methodParams[i].Name}");
             }
         }
+    }
+
+    private JsonRpcResponse HandleToolsList(FastMCPServer server, JsonRpcRequest request)
+    {
+        var tools = server.Tools.Select(t => {
+            var attr = t.GetCustomAttribute<McpToolAttribute>();
+            return new Tool
+            {
+                Name = attr?.Name ?? t.Name,
+                Description = attr?.Description ?? "",
+                InputSchema = GenerateSchema(t)
+            };
+        }).ToList();
+        // Add Dynamic tools if any
+        foreach (var dynamicTool in server.DynamicTools)
+        {
+             // Simplified schema for dynamic tools - you may want to expand this if your dynamic tools support schema
+             tools.Add(new Tool { Name = dynamicTool.Key, Description = "Dynamic Tool" });
+        }
+        return new JsonRpcResponse { Id = request.Id, Result = new ListToolsResult { Tools = tools } };
+    }
+    private JsonRpcResponse HandleResourcesList(FastMCPServer server, JsonRpcRequest request)
+    {
+        var resources = server.Resources.Select(method => {
+            var attr = method.GetCustomAttribute<McpResourceAttribute>();
+            return new Resource
+            {
+                Uri = attr?.Uri ?? "",
+                Name = attr?.Name ?? method.Name,
+                Description = attr?.Description,
+                MimeType = attr?.MimeType
+            };
+        }).ToList();
+        return new JsonRpcResponse { Id = request.Id, Result = new ListResourcesResult { Resources = resources } };
+    }
+    private InputSchema GenerateSchema(MethodInfo method)
+    {
+        var schema = new InputSchema();
+        foreach (var param in method.GetParameters())
+        {
+            if (param.ParameterType == typeof(ClaimsPrincipal)) continue; // Skip injected dependencies
+            string typeName = param.ParameterType == typeof(int) || param.ParameterType == typeof(long) ? "integer" :
+                              param.ParameterType == typeof(bool) ? "boolean" : "string";
+            schema.Properties[param.Name ?? "arg"] = new { type = typeName };
+            if (!param.HasDefaultValue)
+            {
+                schema.Required.Add(param.Name ?? "arg");
+            }
+        }
+        return schema;
     }
 }

@@ -1,4 +1,5 @@
 using System.Reflection;
+using FastMCP.Protocol;
 
 namespace FastMCP.Server;
 
@@ -14,6 +15,9 @@ public class FastMCPServer
     public List<MethodInfo> Tools { get; } = new();
     public List<MethodInfo> Resources { get; } = new();
     public List<MethodInfo> Prompts { get; } = new();
+
+    public List<Tool> ToolsMetadata { get; } = new();
+    public List<Resource> ResourcesMetadata { get; } = new();
     
     // Dictionary to store OpenAPI tool proxies or other dynamic tools by name.
     // This allows the middleware to look up tool handlers by name.
